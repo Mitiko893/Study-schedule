@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>勉強スケジュールメーカー</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap">
+<style>
+:root{--bg:#e9efee;--card:#f8fbfa;--ink:#1c3345;--sub:#5b7180;--line:#c3d1d0;--accent:#1f6f8b;--on:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14222b;--card:#1c2f3b;--ink:#e3eef0;--sub:#8fa8b5;--line:#33505f;--accent:#5bb5d3;--on:#0f1c24}}
+:root[data-theme="dark"]{--bg:#14222b;--card:#1c2f3b;--ink:#e3eef0;--sub:#8fa8b5;--line:#33505f;--accent:#5bb5d3;--on:#0f1c24}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Zen Kaku Gothic New",system-ui,sans-serif;line-height:1.6;
+background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:28px 28px;background-attachment:fixed}
+main{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:clamp(28px,7vw,44px);font-weight:900;margin:8px 0 4px;letter-spacing:.02em}
+h2{font-size:17px;margin:0 0 12px}
+.lead{color:var(--sub);margin:0 0 20px}
+section{background:var(--card);border:2px solid var(--ink);border-radius:6px;padding:16px;margin-bottom:16px;box-shadow:4px 4px 0 var(--ink)}
+.row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+input[type=text],input[type=number],input[type=time],input[type=date]{font:inherit;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:4px;padding:8px;min-width:0}
+input:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.name{flex:1}.hrs{width:84px}
+button{font:inherit;font-weight:700;cursor:pointer;border-radius:4px;border:2px solid var(--ink);padding:8px 14px;background:var(--card);color:var(--ink)}
+button.go{background:var(--accent);color:var(--on);border-color:var(--accent);font-size:17px;padding:12px 20px}
+button.x{padding:6px 10px;border-color:var(--line);color:var(--sub)}
+button:disabled{opacity:.5;cursor:default}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+label.f{display:flex;flex-direction:column;font-size:13px;color:var(--sub);gap:4px}
+.days{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.days label{cursor:pointer}
+.days input{position:absolute;opacity:0}
+.days span{display:inline-block;width:42px;height:42px;line-height:38px;text-align:center;border:2px solid var(--line);border-radius:50%;font-weight:700}
+.days input:checked+span{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.days input:focus-visible+span{outline:3px solid var(--accent);outline-offset:2px}
+.week{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.day{border:1.5px solid var(--line);border-radius:4px;padding:8px;background:var(--bg);min-height:64px}
+.day b{display:block;margin-bottom:4px}
+.s{border-left:5px solid var(--c);padding:2px 0 2px 8px;margin-bottom:6px;font-size:14px}
+.s small{display:block;color:var(--sub)}
+.none{color:var(--sub);font-size:13px}
+.sum{color:var(--sub);font-size:14px;margin:0 0 12px}
+.msg{color:var(--sub);font-size:13px;margin:8px 0 0}
+</style>
+</head>
+<body>
+<main>
+<h1>勉強スケジュールメーカー</h1>
+<p class="lead">科目ごとの週あたり勉強時間を入れると、曜日に振り分けてカレンダー用ファイルを作ります。</p>
+
+<section>
+<h2>科目と週あたりの勉強時間</h2>
+<div id="subjects"></div>
+<button id="add" type="button">科目を追加</button>
+</section>
+
+<section>
+<h2>条件</h2>
+<div class="days" id="days"></div>
+<div class="opts">
+<label class="f">開始時刻<input type="time" id="start" value="19:00"></label>
+<label class="f">週の始まり(この日を含む週)<input type="date" id="date"></label>
+<label class="f">何週分作る?<input type="number" id="weeks" min="1" max="26" value="4"></label>
+</div>
+</section>
+
+<button class="go" id="gen" type="button">スケジュールを作る</button>
+
+<section id="result" style="margin-top:20px" hidden>
+<h2>1週間の予定</h2>
+<p class="sum" id="sum"></p>
+<div class="week" id="week"></div>
+<div style="margin-top:14px">
+<button id="dl" type="button">カレンダー用CSVを保存</button>
+<p class="msg" id="msg">Googleカレンダーの「インポート」またはOutlookから読み込めます。</p>
+</div>
+</section>
+</main>
+
+<script>
+const DAY=['月','火','水','木','金','土','日'];
+const COLORS=['#1f6f8b','#c0562f','#5a8a3c','#8a4fa0','#c29a1f','#b0405e','#3f6bb5'];
+let subjects=[{name:'数学',h:4},{name:'英語',h:3},{name:'プログラミング',h:5}];
+let events=[],dl=null;
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const hm=m=>pad(Math.floor(m/60))+':'+pad(m%60);
+
+function renderSubjects(){
+  const box=$('subjects');box.innerHTML='';
+  subjects.forEach((s,i)=>{
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<input class="name" type="text" placeholder="科目名" aria-label="科目名"><input class="hrs" type="number" min="0.5" step="0.5" aria-label="週あたりの時間"><span>時間/週</span><button class="x" type="button" aria-label="削除">✕</button>';
+    const [n,h,,x]=r.children;
+    n.value=s.name;h.value=s.h;
+    n.oninput=()=>s.name=n.value;
+    h.oninput=()=>s.h=parseFloat(h.value)||0;
+    x.onclick=()=>{subjects.splice(i,1);renderSubjects()};
+    box.appendChild(r);
+  });
+}
+$('add').onclick=()=>{subjects.push({name:'',h:2});renderSubjects()};
+
+DAY.forEach((d,i)=>{
+  const l=document.createElement('label');
+  l.innerHTML='<input type="checkbox" value="'+i+'"'+(i<5?' checked':'')+'><span>'+d+'</span>';
+  $('days').appendChild(l);
+});
+(function(){const t=new Date();$('date').value=t.getFullYear()+'-'+pad(t.getMonth()+1)+'-'+pad(t.getDate())})();
+
+function generate(){
+  const days=[...document.querySelectorAll('#days input:checked')].map(e=>+e.value);
+  const list=subjects.map((s,i)=>({...s,c:COLORS[i%COLORS.length],name:s.name.trim()||'科目'+(i+1)})).filter(s=>s.h>0);
+  if(!days.length||!list.length){alert('曜日を1つ以上選び、科目と時間を入力してください。');return}
+  const load={},plan={};
+  days.forEach(d=>{load[d]=0;plan[d]=[]});
+  list.slice().sort((a,b)=>b.h-a.h).forEach(s=>{
+    const M=Math.round(s.h*4)*15;
+    const n=Math.min(days.length,Math.max(1,Math.ceil(s.h/1.5)));
+    const per=Math.floor(M/n/15)*15;
+    let extra=(M-per*n)/15;
+    days.slice().sort((a,b)=>load[a]-load[b]).slice(0,n).forEach(d=>{
+      const m=per+(extra-->0?15:0);
+      plan[d].push({name:s.name,c:s.c,min:m});load[d]+=m;
+    });
+  });
+  const [sh,sm]=($('start').value||'19:00').split(':').map(Number);
+  const week=$('week');week.innerHTML='';
+  events=[];
+  DAY.forEach((label,d)=>{
+    const box=document.createElement('div');box.className='day';
+    box.innerHTML='<b>'+label+'</b>';
+    let t=sh*60+sm;
+    (plan[d]||[]).forEach(p=>{
+      const e=document.createElement('div');e.className='s';e.style.setProperty('--c',p.c);
+      e.textContent=p.name;
+      const sm2=document.createElement('small');sm2.textContent=hm(t)+'–'+hm(t+p.min)+'('+p.min+'分)';
+      e.appendChild(sm2);box.appendChild(e);
+      events.push({d,name:p.name,s:t,e:t+p.min});
+      t+=p.min;
+    });
+    if(!plan[d]||!plan[d].length){const n=document.createElement('div');n.className='none';n.textContent='休み';box.appendChild(n)}
+    week.appendChild(box);
+  });
+  const total=events.reduce((a,e)=>a+e.e-e.s,0)/60;
+  $('sum').textContent='合計 '+total+' 時間/週('+$('weeks').value+'週分をCSVに出力)';
+  $('result').hidden=false;
+  $('result').scrollIntoView({behavior:'smooth'});
+}
+$('gen').onclick=generate;
+
+function ampm(m){const h=Math.floor(m/60);return((h+11)%12+1)+':'+pad(m%60)+' '+(h<12?'AM':'PM')}
+function buildCsv(){
+  const [y,mo,da]=$('date').value.split('-').map(Number);
+  const base=new Date(y,mo-1,da);
+  base.setDate(base.getDate()-((base.getDay()+6)%7));
+  const W=Math.min(26,Math.max(1,parseInt($('weeks').value)||1));
+  const q=s=>'"'+s.replace(/"/g,'""')+'"';
+  const rows=['Subject,Start Date,Start Time,End Date,End Time,Description'];
+  for(let w=0;w<W;w++)events.forEach(e=>{
+    const d=new Date(base);d.setDate(base.getDate()+w*7+e.d);
+    const ds=pad(d.getMonth()+1)+'/'+pad(d.getDate())+'/'+d.getFullYear();
+    rows.push([q('勉強: '+e.name),ds,ampm(e.s),ds,ampm(e.e),q('勉強スケジュールメーカーで作成')].join(','));
+  });
+  return '\uFEFF'+rows.join('\r\n');
+}
+$('dl').onclick=()=>{
+  if(!events.length)return;
+  const url=URL.createObjectURL(new Blob([buildCsv()],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');
+  a.href=url;a.download='study-schedule.csv';
+  document.body.appendChild(a);a.click();a.remove();
+  URL.revokeObjectURL(url);
+  $('msg').textContent='保存しました。カレンダーのインポートから読み込んでください。';
+};
+
+renderSubjects();
+</script>
+</body>
+</html>
